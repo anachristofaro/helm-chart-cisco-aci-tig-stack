@@ -32,7 +32,7 @@ Helm Chart based application for Cisco ACI monitoring with TIG Stack (Telegraf, 
          value: <apic-password>
    ```
 
-5. Update the InfluDB URL in **values.yaml**, by default it is set in a namespace named "monitor":
+5. Update the InfluxDB URL in **values.yaml**, by default it is set in a namespace named "monitor":
 
    ```console
    http://apps-influxdb.<namespace>:8086
