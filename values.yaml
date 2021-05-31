@@ -1,0 +1,273 @@
+---
+
+grafana: 
+ 
+  ingress:
+    enabled: false
+    hosts:
+      - localhost
+  
+  service:
+    enabled: true
+    type: ClusterIP
+    port: 80
+    targetPort: 3000
+    annotations: {}
+    labels: {}
+    portName: service
+
+  resources:
+    limits:
+      cpu: 100m
+      memory: 200Mi
+    requests:
+      cpu: 100m
+      memory: 200Mi
+  
+  persistence:
+    # type: pvc
+    enabled: false
+    # storageClassName: nas-client
+    # accessModes:
+    #   - ReadWriteOnce
+    # size: 1Gi
+    
+  adminUser: admin
+  adminPassword: admin
+  
+  datasources:
+    datasources.yaml:
+     apiVersion: 1
+     datasources:
+     - name: InfluxDB
+       type: influxdb
+       access: proxy
+       orgId: 1
+       url: http://apps-influxdb.monitor:8086
+       password: telegraf
+       user: telegraf
+       database: telegraf
+       basicAuth: false
+       isDefault: true
+       jsonData:
+          timeInterval: "5s"
+       version: 1
+       editable: false
+  
+
+  dashboardProviders:
+   dashboardproviders.yaml:
+      apiVersion: 1
+      providers:
+      - name: 'default'
+        orgId: 1
+        folder: ''
+        type: file
+        disableDeletion: false
+        editable: true
+        options:
+          path: /var/lib/grafana/dashboards/default
+
+  dashboards:
+    default:
+      cisco_aci-dashboard:
+        file: dashboards/cisco_aci-dashboard.json 
+  
+influxdb:
+
+  serviceAccount:
+    create: true
+    name:
+    annotations: {}
+
+  setDefaultUser:
+    enabled: true
+    user:
+      username: "telegraf"
+      password: "telegraf"
+      privileges: "WITH ALL PRIVILEGES"
+
+  resources:
+    limits:
+      cpu: 2
+      memory: 1Gi
+    requests:
+      cpu: 1
+      memory: 512M
+
+  ingress:
+    enabled: false
+  
+  env:
+    - name: INFLUXDB_DB
+      value: "telegraf"
+
+telegraf-apic1:
+  
+  env:
+    - name: HOSTNAME
+      value: "telegraf-polling-service"
+    - name: APIC_ADDRESS
+      value: sandboxapicdc1.cisco.com
+    - name: APIC_USER
+      value: telegraf
+    - name: APIC_PASSWORD
+      value: PollingService1
+
+  resources:
+    requests:
+      memory: 200Mi
+      cpu: 100m
+    limits:
+      memory: 200Mi
+      cpu: 100m
+  
+  service:
+    enabled: false
+    type: ClusterIP
+    annotations: {}
+  
+  rbac:
+    create: false
+    clusterWide: false
+    rules: []
+
+  override_config:
+    toml: |+
+      [global_tags]
+  
+      [agent]
+        interval = "30s"
+        round_interval = true
+        metric_batch_size = 1000
+        metric_buffer_limit = 10000
+        collection_jitter = "0s"
+        flush_interval = "30s"
+        flush_jitter = "0s"
+        precision = ""
+        hostname = ""
+        omit_hostname = false
+  
+      [[outputs.influxdb]]
+        urls = ["http://apps-influxdb.monitor:8086"]
+        database = "telegraf"
+        username = "telegraf"
+            password = "telegraf"
+      
+      [[inputs.exec]]
+        name_override = "ACI_APIC"
+        commands = ["sh /etc/telegraf/query.sh /api/class/infraWiNode.json"]
+        timeout = "30s"
+        data_format = "json"
+      
+        json_query = "imdata"
+        tag_keys = ["infraWiNode_attributes_nodeName", "infraWiNode_attributes_addr"]
+        json_string_fields = ["*health", "*apicMode", "*adminSt", "*operSt", "*failoverStatus"]
+    
+        [inputs.exec.tags]
+           apic = "${APIC_ADDRESS}"
+    
+      [[inputs.exec]]
+        name_override = "ACI_Faults"
+        commands = ["sh /etc/telegraf/query.sh /api/class/faultCountsWithDetails.json"]
+        timeout = "30s"
+        data_format = "json"
+      
+        json_query = "imdata"
+        json_string_fields = ["faultCountsWithDetails_attributes_crit", "faultCountsWithDetails_attributes_maj", "faultCountsWithDetails_attributes_minor", "faultCountsWithDetails_attributes_warn"]
+     
+        [inputs.exec.tags]
+           apic = "${APIC_ADDRESS}"
+    
+      [[processors.converter]]
+        namepass = ["ACI_Faults"]
+      
+        [processors.converter.fields]
+          integer = ["*faultCountsWithDetails*"]
+      
+      [[inputs.exec]]
+        name_override = "ACI_NodeHealth"
+        commands = ["sh /etc/telegraf/query.sh /api/class/topSystem.json?rsp-subtree-include=health"]
+        timeout = "30s"
+        data_format = "json"
+      
+        json_query = "imdata"
+        tag_keys = ["topSystem_attributes_name", "topSystem_attributes_oobMgmtAddr", "topSystem_attributes_podId", "topSystem_attributes_role"]
+        json_string_fields = ["*attributes_cur", "*systemUpTime", "*state"]
+      
+        [inputs.exec.tags]
+           apic = "${APIC_ADDRESS}"
+      
+      [[processors.converter]]
+        namepass = ["ACI_NodeHealth"]
+      
+        [processors.converter.fields]
+          integer = ["topSystem_children_0_healthInst_attributes_cur"]
+    
+      [[inputs.exec]]
+        name_override = "ACI_SystemHealth"
+        commands = ["sh /etc/telegraf/query.sh /api/class/fabricHealthTotal.json"]
+        timeout = "30s"
+        data_format = "json"
+      
+        json_query = "imdata"
+        tag_keys = ["fabricHealthTotal_attributes_dn"]
+        json_string_fields = ["*cur"]
+      
+        [inputs.exec.tags]
+           apic = "${APIC_ADDRESS}"
+      
+      [[processors.converter]]
+        namepass = ["ACI_SystemHealth"]
+    
+        [processors.converter.fields]
+          integer = ["fabricHealthTotal_attributes_cur"]
+     
+      [[processors.regex]]
+        namepass = ["ACI_SystemHealth"]
+      
+        [[processors.regex.tags]]
+          key = "fabricHealthTotal_attributes_dn"
+          pattern = "topology/"
+          replacement = ""
+      
+      [[inputs.exec]]
+        name_override = "ACI_TenantHealth"
+        commands = ["sh /etc/telegraf/query.sh /api/class/fvTenant.json?rsp-subtree-include=health"]
+        timeout = "30s"
+        data_format = "json"
+      
+        json_query = "imdata"
+        tag_keys = ["fvTenant_attributes_name"]
+        json_string_fields = ["*cur"]
+      
+        [inputs.exec.tags]
+           apic = "${APIC_ADDRESS}"
+      
+      [[processors.converter]]
+        namepass = ["ACI_TenantHealth"]
+      
+        [processors.converter.fields]
+          integer = ["fvTenant_children_0_healthInst_attributes_cur"]
+
+  query_script:
+    shell: |+
+      #!/bin/bash
+      #
+      # Pipe bash arguments to variables
+      operation=$1
+    
+      # Create session cookiefile name
+      cookiefile=cookie_$(openssl rand -base64 12)
+     
+      # APIC Login and store session cookie to /etc/telegraf
+      curl -s -k -d "<aaaUser name=${APIC_USER} pwd=${APIC_PASSWORD}/>" -c /tmp/$cookiefile -X POST https://${APIC_ADDRESS}/api/mo/aaaLogin.xml > /dev/null
+     
+      # APIC Query Operation using the session cookie
+      curl -s -k -X GET https://${APIC_ADDRESS}$operation -b /tmp/$cookiefile
+      
+      # APIC Logout
+      curl -s -k -d "<aaaUser name=${APIC_USER}/>" -X POST https://${APIC_ADDRESS}/api/mo/aaaLogout.json -b /tmp/$cookiefile > /dev/null
+      
+      # Remove session cookie
+      rm -f /tmp/$cookiefile

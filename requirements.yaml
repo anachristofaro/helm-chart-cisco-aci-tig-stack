@@ -1,0 +1,15 @@
+---
+dependencies:
+
+  - name: grafana
+    version: 6.9.0
+    repository: file://local/grafana
+    alias: grafana
+  - name: telegraf # You must have one telegraf per Cisco APIC Cluster
+    version: 1.7.38-beta
+    repository: file://local/telegraf
+    alias: telegraf-apic1
+  - name: influxdb
+    version: ~4.9.14
+    repository: https://helm.influxdata.com/
+    alias: influxdb

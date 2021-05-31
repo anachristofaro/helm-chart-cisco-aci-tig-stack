@@ -1,0 +1,35 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "telegraf.fullname" . }}
+  labels:
+    {{- include "telegraf.labels" . | nindent 4 }}
+data:
+{{- if .Values.override_config }}
+  telegraf.conf: |+
+    {{- .Values.override_config.toml | nindent 4 }}
+{{- else }}
+  telegraf.conf: |+
+    {{ template "global_tags" .Values.config.global_tags }}
+    {{ template "agent" .Values.config.agent }}
+    {{ template "processors" .Values.config.processors }}
+    {{ template "aggregators" .Values.config.aggregators }}
+    {{ template "outputs" .Values.config.outputs }}
+    {{- if .Values.metrics.health.enabled }}
+    [[outputs.health]]
+      service_address = "http://:8888"
+      [[outputs.health.compares]]
+        field = "buffer_size"
+        lt = 5000.0
+      [[outputs.health.contains]]
+        field = "buffer_size"
+    {{- end }}
+    {{ template "inputs" .Values.config.inputs -}}
+    [[inputs.internal]]
+      collect_memstats = {{ .Values.metrics.collect_memstats }}
+{{- end }}
+{{- if .Values.query_script }}
+  query.sh: |+
+    {{- .Values.query_script.shell | nindent 4 }}
+{{- end }}
+
