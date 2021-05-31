@@ -1,4 +1,4 @@
-# cisco-aci-helm-tig-stack
+# helm-chart-cisco-aci-tig-stack
 Cisco ACI Monitor
 
 Helm Chart based application for Cisco ACI monitoring with TIG Stack (Telegraf, InfluxDB, and Grafana).
