@@ -75,6 +75,11 @@ grafana:
   
 influxdb:
 
+  image:
+    repository: "influxdb"
+    tag: "1.8.4"
+    pullPolicy: IfNotPresent
+
   serviceAccount:
     create: true
     name:
@@ -104,6 +109,11 @@ influxdb:
 
 telegraf-apic1:
   
+  image:
+    repo: "telegraf"
+    tag: "1.18.1"
+    pullPolicy: IfNotPresent
+
   env:
     - name: HOSTNAME
       value: "telegraf-polling-service"
