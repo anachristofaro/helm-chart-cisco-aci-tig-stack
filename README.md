@@ -3,6 +3,8 @@ Cisco ACI Monitor
 
 Helm Chart based application for Cisco ACI monitoring with TIG Stack (Telegraf, InfluxDB, and Grafana).
 
+![alt text](https://github.com/anachristofaro/helm-chart-cisco-aci-tig-stack/tree/master/local/grafana/dashboards/CiscoACIDashboardExample.png?raw=true)
+
 ## Usage
 
 1. Install [Helm](https://helm.sh). For more information, see [Helm documentation](https://helm.sh/docs/).
